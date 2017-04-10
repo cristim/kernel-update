@@ -9,6 +9,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -41,38 +42,48 @@ func main() {
 	logger.Println(latestVersion)
 
 	dir, err := ioutil.TempDir("", "")
+
 	if err != nil {
 		logger.Fatalln(err.Error)
 	}
-	os.Chdir(dir)
 
 	logger.Println("Using temporary directory", dir)
-
+	os.Chdir(dir)
 	downloadPackages(kernelURLBase, latestVersion, imageFlavor)
 
-	if err := printInstallPackagesCommand(dir); err != nil {
-
+	if err := installPackages(dir); err != nil {
 		logger.Println(err.Error())
-		os.RemoveAll(dir)
+	}
+
+	fmt.Println("Cleaning up...")
+	err = os.RemoveAll(dir)
+
+	if err != nil {
+		fmt.Println(err.Error())
 	}
 
 }
 
-func printInstallPackagesCommand(dir string) error {
+func installPackages(dir string) error {
 
-	_, err := filepath.Glob("*.deb")
+	globPath := filepath.Join(dir, "*.deb")
+	_, err := filepath.Glob(globPath)
 
 	if err != nil {
-
 		logger.Println(err.Error())
 		return err
 	}
 
-	fmt.Println("Execute the following commands in order to update your kernel:")
-	fmt.Println("################# BEGIN #################")
-	fmt.Printf("cd %s \nsudo dpkg -i *.deb \nrm -rf %s\n", dir, dir)
-	fmt.Println("################## END ##################")
+	sudoCmd := fmt.Sprintf("sudo dpkg -i %s", globPath)
+	fmt.Printf("Executing '%s'\n", sudoCmd)
+	cmd := exec.Command("/bin/sh", "-c", sudoCmd)
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
 
+	err = cmd.Run()
+	if err != nil {
+		log.Fatal(err)
+	}
 	return err
 }
 
@@ -109,12 +120,12 @@ func walkKernelVersionsTree(n *html.Node, latestVersion *string) {
 
 func downloadPackages(kernelURLBase, latestVersion, flavor string) {
 	files := getPackageFiles(kernelURLBase, latestVersion, flavor)
-	downloadFromUrl(kernelURLBase + latestVersion + files.allHeaders)
-	downloadFromUrl(kernelURLBase + latestVersion + files.currentArchHeaders)
-	downloadFromUrl(kernelURLBase + latestVersion + files.currentArchImage)
+	downloadFromURL(kernelURLBase + latestVersion + files.allHeaders)
+	downloadFromURL(kernelURLBase + latestVersion + files.currentArchHeaders)
+	downloadFromURL(kernelURLBase + latestVersion + files.currentArchImage)
 }
 
-func downloadFromUrl(url string) {
+func downloadFromURL(url string) {
 	tokens := strings.Split(url, "/")
 	fileName := tokens[len(tokens)-1]
 	fmt.Println("Downloading", url, "to", fileName)
@@ -139,13 +150,11 @@ func downloadFromUrl(url string) {
 		fmt.Println("Error while downloading", url, "-", err)
 		return
 	}
-
 	fmt.Println(n, "bytes downloaded.")
 }
 
 func getPackageFiles(kernelURLBase, latestVersion, flavor string) fileURLs {
 	var fileList fileURLs
-
 	htmlBodyReader := httpGet(kernelURLBase + latestVersion)
 
 	doc, err := html.Parse(htmlBodyReader)
@@ -154,7 +163,6 @@ func getPackageFiles(kernelURLBase, latestVersion, flavor string) fileURLs {
 	}
 
 	walkBuildsTree(doc, &fileList, flavor)
-
 	return fileList
 }
 
@@ -182,5 +190,4 @@ func walkBuildsTree(n *html.Node, urls *fileURLs, flavor string) {
 	for c := n.FirstChild; c != nil; c = c.NextSibling {
 		walkBuildsTree(c, urls, flavor)
 	}
-
 }
