@@ -25,6 +25,7 @@ type fileURLs struct {
 	allHeaders         string
 	currentArchHeaders string
 	currentArchImage   string
+	currentArchModules string
 }
 
 func main() {
@@ -41,10 +42,10 @@ func main() {
 	latestVersion := parseLatestKernelVersion(htmlBodyReader)
 	logger.Println(latestVersion)
 
-	dir, err := ioutil.TempDir("", "")
+	dir, err := ioutil.TempDir("", "kernel-update")
 
 	if err != nil {
-		logger.Fatalln(err.Error)
+		logger.Fatalln(err.Error())
 	}
 
 	logger.Println("Using temporary directory", dir)
@@ -123,6 +124,7 @@ func downloadPackages(kernelURLBase, latestVersion, flavor string) {
 	downloadFromURL(kernelURLBase + latestVersion + files.allHeaders)
 	downloadFromURL(kernelURLBase + latestVersion + files.currentArchHeaders)
 	downloadFromURL(kernelURLBase + latestVersion + files.currentArchImage)
+	downloadFromURL(kernelURLBase + latestVersion + files.currentArchModules)
 }
 
 func downloadFromURL(url string) {
@@ -183,6 +185,9 @@ func walkBuildsTree(n *html.Node, urls *fileURLs, flavor string) {
 			}
 			if strings.Contains(file, "image") {
 				urls.currentArchImage = file
+			}
+			if strings.Contains(file, "modules") {
+				urls.currentArchModules = file
 			}
 		}
 	}
